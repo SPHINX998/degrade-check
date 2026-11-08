@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -923,6 +924,36 @@ func TestRelayModelListIsReadWithTheConfiguredKeyAndHeaders(t *testing.T) {
 	}
 	if auth != "Bearer sk-secret-1234" || custom != "b" {
 		t.Fatalf("auth=%q custom=%q", auth, custom)
+	}
+}
+
+func TestModelTheJudgeReadsByRuleIsNotCalledUnjudgeable(t *testing.T) {
+	judge := newJudgeServer(t, "genuine")
+	relay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"data":[{"id":"gpt-6-astra"},{"id":"gpt-6.1-sol"}]}`)
+	}))
+	defer relay.Close()
+	runner := &Runner{Server: judge.URL, Client: &http.Client{}}
+	config := ServerConfig{Models: []string{"gpt-6-astra"}}
+	list := runner.ListModels(context.Background(), relayTarget(relay.URL), config)
+	if !slices.Contains(list.Judgeable, "gpt-6.1-sol") {
+		t.Fatalf("the judge said it can read it: %+v", list)
+	}
+	calls := func() int {
+		judge.mu.Lock()
+		defer judge.mu.Unlock()
+		n := 0
+		for _, body := range judge.bodies {
+			if strings.Contains(body, "/challenge") {
+				n++
+			}
+		}
+		return n
+	}
+	before := calls()
+	runner.ListModels(context.Background(), relayTarget(relay.URL), config)
+	if calls() != before || before != 1 {
+		t.Fatalf("each unlisted model is asked about once: %d then %d", before, calls())
 	}
 }
 

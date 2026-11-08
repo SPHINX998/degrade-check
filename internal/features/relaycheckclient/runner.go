@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SPHINX998/degrade-check/internal/features/relayupstream"
@@ -77,6 +78,9 @@ type Runner struct {
 	Exec   CommandRunner
 	Now    func() time.Time
 	Prices map[string]Price
+
+	bankedMu sync.Mutex
+	banked   map[string]bankedAnswer
 }
 
 func newResultID() string {

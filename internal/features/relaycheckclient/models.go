@@ -12,7 +12,14 @@ import (
 const (
 	modelListTimeout  = 30 * time.Second
 	modelListCacheFor = 10 * time.Minute
+	bankedCacheFor    = time.Hour
 )
+
+// bankedAnswer is what the judge said about one model.
+type bankedAnswer struct {
+	ok bool
+	at time.Time
+}
 
 // headerDoer puts a relay's configured headers on the model-list request.
 type headerDoer struct {
@@ -62,6 +69,51 @@ func (r *Runner) ListModels(ctx context.Context, target Target, config ServerCon
 	for _, model := range models {
 		if !relayupstream.ModelUntestable(model) {
 			out.Models = append(out.Models, model)
+		}
+	}
+	out.Judgeable = r.judgeable(ctx, out.Models, config.Models)
+	return out
+}
+
+// judgeable says which of models the judge can read. Its published list leaves
+// out models it judges by rule rather than by a bank class, so the rest are asked
+// one by one. The answer rarely changes and asking costs no quota, only a slot of
+// the hourly limit, so it is remembered. A model it could not be asked about stays
+// out of the list, as "only shows it serves" is the weaker claim.
+func (r *Runner) judgeable(ctx context.Context, models, published []string) []string {
+	known := map[string]bool{}
+	for _, model := range published {
+		known[strings.ToLower(model)] = true
+	}
+	out := append([]string{}, published...)
+	remote := NewRemoteJudge(r.Server, r.Client)
+	for _, model := range models {
+		key := strings.ToLower(model)
+		if known[key] {
+			continue
+		}
+		r.bankedMu.Lock()
+		banked, seen := r.banked[key]
+		fresh := seen && time.Since(banked.at) < bankedCacheFor
+		r.bankedMu.Unlock()
+		if !fresh {
+			if ctx.Err() != nil {
+				break
+			}
+			_, ok := remote.Challenge(model)
+			if remote.Failure() != nil {
+				break
+			}
+			banked = bankedAnswer{ok: ok, at: time.Now()}
+			r.bankedMu.Lock()
+			if r.banked == nil {
+				r.banked = map[string]bankedAnswer{}
+			}
+			r.banked[key] = banked
+			r.bankedMu.Unlock()
+		}
+		if banked.ok {
+			out = append(out, model)
 		}
 	}
 	return out
