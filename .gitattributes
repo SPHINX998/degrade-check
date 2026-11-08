@@ -1,0 +1,2 @@
+# Line endings end up inside the program: every checkout must give the same bytes.
+* -text

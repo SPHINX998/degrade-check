@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>降智检测工具</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1a1d23;--muted:#667085;--line:#e4e7ec;--accent:#2563eb;--good:#067647;--good-bg:#dcfae6;--bad:#b42318;--bad-bg:#fee4e2;--warn:#b54708;--warn-bg:#fef0c7;--idle:#475467;--idle-bg:#eef0f3}
+@media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#1a1d22;--text:#e7e9ec;--muted:#98a2b3;--line:#2c3138;--accent:#6b9bff;--good:#6ce9a6;--good-bg:#0d3a24;--bad:#fda29b;--bad-bg:#4a1512;--warn:#fec84b;--warn-bg:#46300a;--idle:#c1c7d0;--idle-bg:#2a2f36}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:24px 16px 40px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:20px;margin:0}
+h2{font-size:15px;margin:0 0 12px}
+.muted{color:var(--muted);font-size:12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+td.wrap{white-space:normal;min-width:200px}
+th{font-weight:500;color:var(--muted);font-size:12px}
+tr:last-child td{border-bottom:0}
+input[type=text],input[type=number]{background:transparent;color:inherit;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;width:100%}
+input[type=number]{width:88px}
+button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;font:inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.tag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;background:var(--idle-bg);color:var(--idle)}
+.tag.good{background:var(--good-bg);color:var(--good)}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.grid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.switch{flex-direction:row!important;align-items:center;font-size:14px!important;color:var(--text)!important;gap:8px!important}
+.promo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.promo a,.cta{color:var(--accent)}
+.err{color:var(--bad)}
+details.models{position:relative;min-width:220px}
+details.models summary::after{content:"▾";float:right;margin-left:8px;color:var(--muted)}
+details.models summary{cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:4px 8px;list-style:none;white-space:normal}
+.model-menu{position:absolute;z-index:5;left:0;top:calc(100% + 4px);width:320px;max-height:280px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.model-menu label{display:flex;gap:8px;align-items:center;padding:3px 2px;white-space:normal}
+.model-menu input[type=text]{margin-bottom:6px}
+.empty{color:var(--muted);padding:12px 0}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>降智检测工具</h1>
+  <span class="muted" id="meta"></span>
+</header>
+
+<section>
+  <h2>本机渠道</h2>
+  <div class="scroll"><table><thead><tr><th></th><th>渠道</th><th>来源</th><th>地址</th><th>模型</th><th>近期结果</th></tr></thead><tbody id="targets"><tr><td colspan="6" class="empty">正在读取本机配置…</td></tr></tbody></table></div>
+  <div class="bar"><button id="run">测试选中的渠道</button><span id="job" class="muted"></span><span id="error" class="err"></span></div>
+</section>
+
+<section>
+  <h2>结果</h2>
+  <div class="scroll"><table><thead><tr><th>时间</th><th>渠道</th><th>模型</th><th>结论</th><th>额度</th><th>耗时</th><th>说明</th></tr></thead><tbody id="history"></tbody></table></div>
+</section>
+
+<section>
+  <h2>定时与预算</h2>
+  <div class="grid">
+    <label class="switch"><input type="checkbox" id="sched"> 定时测试</label>
+    <label>每隔（小时）<input type="number" id="hours" min="1" max="168"></label>
+    <label>每月预算（美元）<input type="number" id="budget" min="0" step="0.5"></label>
+    <label>官方登录每日上限（次）<input type="number" id="limit" min="0"></label>
+    <button id="save">保存</button>
+  </div>
+  <div class="bar muted"><span id="spend"></span><span id="saved"></span></div>
+</section>
+
+<section>
+  <details id="netbox"><summary><strong>联网记录</strong> <span class="muted">这次运行发出的每个请求：发到哪里、带了什么（只记类型，不记内容）</span></summary>
+    <div class="scroll"><table><thead><tr><th>时间</th><th>地址</th><th>路径</th><th>发送的内容</th><th>状态</th></tr></thead><tbody id="net"></tbody></table></div>
+  </details>
+</section>
+
+<section class="promo" id="promo" hidden></section>
+<p class="muted">结论只代表这几次回答的统计特征，不是模型身份证明；背后是号池的渠道每次可能不同，建议看多次结果。密钥只发给配置里的接口地址，判定服务只收到模型名、题目长度和回答文本。不放心可以先用临时 Key。由 PinAI 发布，<a href="https://github.com/SPHINX998/degrade-check" target="_blank" rel="noopener">源码公开</a>，可以自己编译核对。</p>
+</main>
+<script>
+const token=new URLSearchParams(location.search).get("t");
+history.replaceState(null,"",location.pathname);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api=async(path,body)=>{const r=await fetch(path,{method:body?"POST":"GET",headers:{"X-Check-Token":token,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||("请求失败 "+r.status)),{data:d});return d};
+let state=null,chosen=null,modelSets={},lists={},settingsLoaded=false;
+const verdicts={genuine:["真","good"],degraded:["降智","bad"],swapped:["替换","bad"],mixed:["两题不一致","warn"],invalid:["证据不足","warn"],blocked:["测不了","warn"],served:["只确认能用",""],failed:["请求失败","warn"],pending:["等待判定",""],error:["未测",""]};
+function verdictTag(r){const v=verdicts[r.verdict]||[r.verdict,""];let label=v[0];if(r.verdict==="genuine"&&r.one_class)label="像所问型号";if(r.verdict==="swapped"&&r.substitute)label="替换为 "+r.substitute;if(r.verdict==="degraded"&&r.attributed)label="降智为 "+r.attributed;return `<span class="tag ${v[1]}">${esc(label)}</span>`}
+function money(n){return n<0.01?"$"+n.toFixed(4):"$"+n.toFixed(3)}
+function cost(r){const tokens=r.input_tokens+r.output_tokens+r.cache_tokens;const t=tokens?`${tokens.toLocaleString()} token`:"";let main="";if(r.cost!=null){main=r.cost_basis==="balance"?`约 ${money(r.cost)}（余额差）`:r.cost_basis==="reported"?`官方额度，约等于 ${money(r.cost)}`:`牌价约 ${money(r.cost)}`}if(r.quota_after)main=(main?main+"，":"")+"官方额度："+r.quota_after;const sub=[r.cost_note,t].filter(Boolean).join("，");return main?`${esc(main)}<br><span class="muted">${esc(sub)}</span>`:esc(sub||"—")}
+function when(s){const d=new Date(s);return d.toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}
+function picked(t){return modelSets[t.id]&&modelSets[t.id].length?modelSets[t.id]:[t.model]}
+function modelCell(t){if(t.problem)return `<span class="tag warn">${esc(t.problem)}</span>`;const list=lists[t.id];const names=picked(t);const summary=`<summary>${esc(names.join("、"))}</summary>`;if(!list)return `<details class="models" data-for="${esc(t.id)}">${summary}<div class="model-menu muted">正在读取模型列表…</div></details>`;const all=[...new Set([...names,...(list.models||[])])];const known=new Set((list.judgeable||[]).map(m=>m.toLowerCase()));const rows=all.map(m=>`<label data-name="${esc(m.toLowerCase())}"><input type="checkbox" data-pick="${esc(t.id)}" value="${esc(m)}" ${names.includes(m)?"checked":""}>${esc(m)}${known.has(m.toLowerCase())?"":' <span class="tag">只测能用</span>'}</label>`).join("");const err=list.error?`<div class="muted">读不到模型列表：${esc(list.error)}</div>`:"";return `<details class="models" data-for="${esc(t.id)}">${summary}<div class="model-menu">${err}<input type="text" data-search placeholder="搜索或输入模型名，回车添加">${rows}</div></details>`}
+function renderTargets(){const hist=state.history;const rows=state.targets.map(t=>{const mine=hist.filter(r=>r.target_id===t.id&&r.questions>0&&!["failed","invalid","pending","error","blocked","served"].includes(r.verdict));const bad=mine.filter(r=>r.verdict==="degraded"||r.verdict==="swapped").length;const recent=mine.length?`${mine.length} 次里 ${bad} 次异常`:"还没测过";const checked=chosen.has(t.id);const addr=t.mode==="official"?"官方登录":esc(t.host||"")+(t.key_hint?` <span class="muted">${esc(t.key_hint)}</span>`:"")+(t.insecure?' <span class="tag warn">未加密</span>':"");return `<tr><td><input type="checkbox" data-id="${esc(t.id)}" ${checked?"checked":""} ${t.problem?"disabled":""}></td><td>${esc(t.name)}${t.current?' <span class="tag">使用中</span>':""}<br><span class="muted">${t.app==="codex"?"Codex":"Claude"}</span></td><td>${esc(t.source)}</td><td>${addr}</td><td>${modelCell(t)}</td><td>${esc(recent)}</td></tr>`});$("targets").innerHTML=rows.join("")||'<tr><td colspan="6" class="empty">这台电脑上没有找到 Codex 或 Claude 的配置</td></tr>'}
+async function loadModels(id){try{lists[id]=await api("/api/models?id="+encodeURIComponent(id))}catch(e){lists[id]={models:[],judgeable:[],error:e.message}}if(!document.querySelector("details.models[open]"))renderTargets()}
+function renderHistory(){const rows=state.history.slice().reverse().slice(0,50).map(r=>{const switchHint=(r.verdict==="degraded"||r.verdict==="swapped")&&!r.self&&state.promo&&state.promo.url;const note=esc(r.note||(r.verdict==="genuine"&&r.mode==="official"&&r.one_class?"官方登录只判是否换了型号，不判同型号降智":""));return `<tr><td>${esc(when(r.at))}${r.scheduled?'<br><span class="muted">定时</span>':""}</td><td>${esc(r.target_name)}</td><td>${esc(r.model)}</td><td>${verdictTag(r)}</td><td>${cost(r)}</td><td>${r.latency_ms?Math.round(r.latency_ms/1000)+" 秒":"—"}</td><td class="wrap">${note}${switchHint?` <a class="cta" href="${esc(state.promo.url)}" target="_blank" rel="noopener">试试 ${esc(state.promo.title)}（推广）</a>`:""}</td></tr>`});$("history").innerHTML=rows.join("")||'<tr><td colspan="7" class="empty">还没有结果</td></tr>'}
+function renderPromo(){const p=state.promo,el=$("promo");if(!p||!p.url){el.hidden=true;return}el.hidden=false;el.innerHTML=`<span class="tag">推广</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.cta||"去看看")}</a>`}
+function render(){if(chosen===null){const saved=state.settings.selected||[];chosen=new Set(saved.length?saved:state.targets.filter(t=>t.current&&!t.problem).map(t=>t.id));modelSets=Object.assign({},state.settings.model_sets);state.targets.forEach(t=>loadModels(t.id))}if(!settingsLoaded){$("sched").checked=state.settings.schedule_enabled;$("hours").value=state.settings.interval_hours;$("budget").value=state.settings.monthly_budget_usd;$("limit").value=state.settings.official_daily_limit;settingsLoaded=true}if(!document.querySelector("details.models[open]"))renderTargets();renderHistory();renderPromo();$("spend").textContent=`本月中转测试约用 ${money(state.month_spend)}`;const upgrade=state.latest_version&&state.latest_version!==state.version?`　有新版本 ${state.latest_version}`:"";$("meta").textContent=`v${state.version}　数据：${state.seal}${state.online?"":"　判定服务连不上"}${upgrade}`;const j=state.job;$("run").disabled=j.running;$("job").textContent=j.running?`正在测 ${j.current||""}（${j.done}/${j.total}），每个模型约 1 分钟`:""}
+async function refresh(){try{state=await api("/api/state");render();if($("netbox").open)renderNet()}catch(e){$("error").textContent=e.message}}
+async function renderNet(){const d=await api("/api/net");$("net").innerHTML=d.events.slice().reverse().map(e=>`<tr><td>${esc(when(e.at))}</td><td>${esc(e.host)}</td><td>${esc(e.path)}</td><td class="wrap">${esc(e.sent)}</td><td>${e.error?"失败":esc(e.status||"")}</td></tr>`).join("")||'<tr><td colspan="5" class="empty">还没有请求</td></tr>'}
+$("netbox").addEventListener("toggle",()=>{if($("netbox").open)renderNet()});
+function currentSettings(){return Object.assign({},state.settings,{schedule_enabled:$("sched").checked,interval_hours:+$("hours").value||6,monthly_budget_usd:+$("budget").value,official_daily_limit:+$("limit").value,selected:[...chosen],model_sets:modelSets})}
+$("targets").addEventListener("change",e=>{if(e.target.dataset.id){e.target.checked?chosen.add(e.target.dataset.id):chosen.delete(e.target.dataset.id)}if(e.target.dataset.pick){const id=e.target.dataset.pick,t=state.targets.find(x=>x.id===id);const set=new Set(picked(t));e.target.checked?set.add(e.target.value):set.delete(e.target.value);modelSets[id]=[...set];e.target.closest("details").querySelector("summary").textContent=picked(t).join("、")}});
+$("targets").addEventListener("input",e=>{if(e.target.dataset.search===undefined)return;const q=e.target.value.trim().toLowerCase();e.target.parentElement.querySelectorAll("label").forEach(l=>{l.hidden=!l.dataset.name.includes(q)})});
+$("targets").addEventListener("keydown",e=>{if(e.key!=="Enter"||e.target.dataset.search===undefined)return;const name=e.target.value.trim();if(!name)return;e.preventDefault();const id=e.target.closest("details").dataset.for,t=state.targets.find(x=>x.id===id);modelSets[id]=[...new Set([...picked(t),name])];const d=e.target.closest("details");d.open=false;renderTargets()});
+document.addEventListener("click",e=>{const open=document.querySelector("details.models[open]");if(open&&!open.contains(e.target))open.open=false;const a=e.target.closest&&e.target.closest('a[target="_blank"]');if(a){e.preventDefault();api("/api/open",{url:a.href}).catch(()=>{})}});
+$("run").addEventListener("click",async()=>{$("error").textContent="";try{await api("/api/settings",currentSettings());await api("/api/test",{ids:[...chosen]});refresh()}catch(e){$("error").textContent=e.message}});
+$("save").addEventListener("click",async()=>{$("saved").textContent="";try{const r=await api("/api/settings",currentSettings());state.settings=r.settings;$("sched").checked=r.settings.schedule_enabled;$("saved").textContent="已保存"}catch(e){$("sched").checked=false;$("saved").textContent=e.message}});
+refresh();setInterval(refresh,5000);
+</script>
+</body>
+</html>
