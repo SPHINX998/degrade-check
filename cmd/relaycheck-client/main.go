@@ -17,7 +17,7 @@ import (
 )
 
 // version is stamped at build time.
-var version = "0.3.1"
+var version = "0.3.2"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {

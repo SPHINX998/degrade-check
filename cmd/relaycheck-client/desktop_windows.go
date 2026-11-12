@@ -108,7 +108,22 @@ func runDesktop(ctx context.Context, app *relaycheckclient.App, listener net.Lis
 	quit := func() {
 		view.Dispatch(view.Terminate)
 	}
-	go systray.Run(func() {
+	go runTray(window, quit)
+
+	view.Navigate(url)
+	view.Run()
+	systray.Quit()
+	os.Exit(0)
+	return <-served
+}
+
+// runTray owns the tray icon. Windows delivers a window's messages only to the
+// thread that created it, so the goroutine must stay on one thread: left
+// unlocked, the scheduler moves it under load and the icon stops answering
+// clicks for good, leaving no way to exit.
+func runTray(window uintptr, quit func()) {
+	runtime.LockOSThread()
+	systray.Run(func() {
 		systray.SetIcon(trayIcon)
 		systray.SetTitle(windowTitle)
 		systray.SetTooltip(windowTitle)
@@ -127,10 +142,4 @@ func runDesktop(ctx context.Context, app *relaycheckclient.App, listener net.Lis
 			}
 		}()
 	}, nil)
-
-	view.Navigate(url)
-	view.Run()
-	systray.Quit()
-	os.Exit(0)
-	return <-served
 }

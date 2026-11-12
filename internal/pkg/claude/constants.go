@@ -10,7 +10,7 @@ const APIKeyBetaHeader = "claude-code-20250219,interleaved-thinking-2025-05-14,f
 func DefaultHeaders() map[string]string {
 	return map[string]string{
 		"Anthropic-Dangerous-Direct-Browser-Access": "true",
-		"User-Agent": "claude-cli/2.1.258 (external, cli)",
+		"User-Agent": "claude-cli/2.1.321 (external, cli)",
 		"X-App": "cli",
 		"X-Stainless-Arch": "arm64",
 		"X-Stainless-Lang": "js",
